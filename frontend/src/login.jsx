@@ -1,16 +1,33 @@
 import { useState } from "react";
 import Validation from './loginValidation'
+import axios from 'axios';
+import { useNavigate } from "react-router-dom";
 
 function Login(){
+    const navigate = useNavigate();
+
     const [values, setValues] = useState({
         username: "", password: ""
     })
 
     const [errors, setError] = useState({});
 
-    const handleSubmit = (event) => {
+    const handleSubmit = async (event) => {
         event.preventDefault();
         setError(Validation(values)); 
+
+        try{
+            const response = await axios.post('http://localhost:5000/api/login', {
+                username: values.username,
+                password: values.password
+            });
+
+            if (response.data.success){
+                navigate('/adminpage');
+            }
+        } catch(error){
+            alert(`Login failed. Pls check credentials!`);
+        }
     }
     
     const handleInput = (event) =>{
