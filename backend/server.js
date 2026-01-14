@@ -6,6 +6,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+
 app.get('/api/resources', async (req, res) => {
     try{
         const [rows] = await db.query('SELECT * FROM resources');
