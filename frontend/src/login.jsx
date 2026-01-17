@@ -21,9 +21,17 @@ function Login(){
                 username: values.username,
                 password: values.password
             });
-
+            console.log(response);
             if (response.data.success){
-                navigate('/adminpage');
+                if(response.data.user.role === "admin"){
+                    navigate('/adminpage');
+                }else if (response.data.user.role === "power_user"){
+                    navigate('/powerpage');
+                }else if (response.data.user.role === "normal_user"){
+                    navigate('/userpage');
+                }else{
+                    alert(`Invalid user role ${response.data.user.role}`);
+                }
             }
         } catch(error){
             alert(`Login failed. Pls check credentials!`);

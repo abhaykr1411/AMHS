@@ -4,7 +4,7 @@ import {
   AlertCircle, Clock, ChevronDown 
 } from 'lucide-react';
 
-const AdminPage = () => {
+const PowerPage = () => {
   const [activeTab, setActiveTab] = useState('users');
 
   // --- Mock Data ---
@@ -168,4 +168,4 @@ const AdminPage = () => {
   );
 };
 
-export default AdminPage;
+export default PowerPage;

@@ -1,6 +1,8 @@
 import Login from "./login";
 import {BrowserRouter, Routers, Route, Routes} from 'react-router-dom';
-import EnterpriseSystem from "./AdminPage";
+import PowerPage from "./PowerPage";
+import NormalPage from "./NormalPage";
+import AdminPage from "./AdminPage";
 
 function App() {
   return (
@@ -8,7 +10,9 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Login/>}></Route>
-          <Route path="/adminpage" element={<EnterpriseSystem/>}></Route>
+          <Route path="/adminpage" element={<AdminPage/>}></Route>
+          <Route path="/powerpage" element={<PowerPage/>}></Route>
+          <Route path="/userpage" element={<NormalPage/>}></Route>
         </Routes>
       </BrowserRouter>
     </div>
