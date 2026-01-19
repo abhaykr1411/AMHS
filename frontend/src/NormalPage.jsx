@@ -83,9 +83,9 @@ const NormalPage= () => {
                 <tbody>
                   {users.map(u => (
                     <tr key={u.id}>
-                      <td className="fw-medium py-3">{u.name}</td>
-                      <td>{u.email}</td>
-                      <td><span className="badge rounded-1 px-2 py-1" style={{ backgroundColor: u.color, color: u.text }}>{u.role}</span></td>
+                      <td className="fw-medium py-3">{u.full_name}</td>
+                      <td>{u.username}</td>
+                      <td><span className="badge rounded-1 px-2 py-1" style={{ backgroundColor: u.color, color: u.text }}>{u.role_name}</span></td>
                       <td>{u.groups} groups</td>
                       <td className="text-end">
                         <button className="btn btn-link text-primary p-1"><Pencil size={18} /></button>

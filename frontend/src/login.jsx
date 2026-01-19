@@ -39,7 +39,7 @@ function Login(){
     }
     
     const handleInput = (event) =>{
-        setValues(prev => ({...prev, [event.target.name]: [event.target.value]}))
+        setValues(prev => ({...prev, [event.target.name]: event.target.value}))
     }
 
     return (
