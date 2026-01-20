@@ -48,17 +48,40 @@ app.get('/api/users', (req, res) => {
   });
 });
 
-app.post('/api/users', (req, res) => {
-  const { username, password, full_name, role_id } = req.body;
+app.get('/api/user-groups/:id', (req,res)=>{
+  const sql = `
+    SELECT group_id 
+    FROM user_groups 
+    WHERE user_id = ?
+  `;
+  db.query(sql,[req.params.id],(err,result)=>{
+    if(err) return res.status(500).json(err);
+    res.json(result);
+  });
+});
+
+// NEW: Delete user groups endpoint (needed for update functionality)
+app.delete('/api/user-groups/:userId', (req,res)=>{
+  const sql = "DELETE FROM user_groups WHERE user_id=?";
+  db.query(sql,[req.params.userId],(err,result)=>{
+    if(err) return res.status(500).json(err);
+    res.json({success:true});
+  });
+});
+
+app.post('/api/users', (req,res)=>{
+  const { username,password,full_name,role_id } = req.body;
+
+  const finalRole = role_id ? role_id : 3;
 
   const sql = `
     INSERT INTO users (username,password,full_name,role_id)
     VALUES (?,?,?,?)
   `;
 
-  db.query(sql, [username,password,full_name,role_id], (err, result) => {
-    if (err) return res.status(500).json(err);
-    res.json({ success:true, message:"User created" });
+  db.query(sql,[username,password,full_name,finalRole],(err,result)=>{
+    if(err) return res.status(500).json(err);
+    res.json({ success:true, insertId: result.insertId });
   });
 });
 
@@ -71,15 +94,20 @@ app.delete('/api/users/:id', (req,res)=>{
 });
 
 app.put('/api/users/:id', (req,res)=>{
-  const { full_name, role_id } = req.body;
-  
-  const sql = `
-    UPDATE users 
-    SET full_name=?, role_id=?
-    WHERE id=?
-  `;
-  
-  db.query(sql,[full_name, role_id, req.params.id],(err)=>{
+  const { full_name, role_id, password } = req.body;
+
+  let sql;
+  let params;
+
+  if(password && password.length > 0){
+    sql = `UPDATE users SET full_name=?, role_id=?, password=? WHERE id=?`;
+    params = [full_name, role_id, password, req.params.id];
+  } else {
+    sql = `UPDATE users SET full_name=?, role_id=? WHERE id=?`;
+    params = [full_name, role_id, req.params.id];
+  }
+
+  db.query(sql, params, (err)=>{
     if(err) return res.status(500).json(err);
     res.json({success:true});
   });
@@ -243,7 +271,56 @@ app.put('/api/complaints/:id', (req,res)=>{
   });
 });
 
+// UPDATE Group Name
+app.put('/api/groups/:id', (req, res) => {
+  const { group_name } = req.body;
+  const sql = "UPDATE project_groups SET group_name=? WHERE id=?";
+  db.query(sql, [group_name, req.params.id], (err) => {
+    if (err) return res.status(500).json(err);
+    res.json({ success: true });
+  });
+});
 
+// DELETE Group
+app.delete('/api/groups/:id', (req, res) => {
+  // Note: This might fail if the group is referenced in user_groups or resources
+  // dependent on your Foreign Key settings (ON DELETE CASCADE recommended in SQL)
+  const sql = "DELETE FROM project_groups WHERE id=?";
+  db.query(sql, [req.params.id], (err) => {
+    if (err) return res.status(500).json(err);
+    res.json({ success: true });
+  });
+});
+
+app.put('/api/resources/:id', (req, res) => {
+  const { resource_code, resource_type_id, description } = req.body;
+  const sql = `
+    UPDATE resources 
+    SET resource_code=?, resource_type_id=?, description=?
+    WHERE id=?
+  `;
+  db.query(sql, [resource_code, resource_type_id, description, req.params.id], (err) => {
+    if (err) return res.status(500).json(err);
+    res.json({ success: true });
+  });
+});
+
+// DELETE Resource
+app.delete('/api/resources/:id', (req, res) => {
+  const sql = "DELETE FROM resources WHERE id=?";
+  db.query(sql, [req.params.id], (err) => {
+    if (err) return res.status(500).json(err);
+    res.json({ success: true });
+  });
+});
+
+app.delete('/api/complaints/:id', (req, res) => {
+  const sql = "DELETE FROM complaints WHERE id=?";
+  db.query(sql, [req.params.id], (err) => {
+    if (err) return res.status(500).json(err);
+    res.json({ success: true });
+  });
+});
 
 app.listen(5000, () => {
   console.log("Server running on port 5000");

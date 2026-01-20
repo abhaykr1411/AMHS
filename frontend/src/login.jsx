@@ -32,9 +32,11 @@ function Login(){
                 }else{
                     alert(`Invalid user role ${response.data.user.role}`);
                 }
+            }else{
+                alert(`login failed. pls check credentials`)
             }
         } catch(error){
-            alert(`Login failed. Pls check credentials!`);
+            alert(`Loin failed. Pls check credentials!`);
         }
     }
     

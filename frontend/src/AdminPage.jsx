@@ -6,307 +6,444 @@ import {
   Plus,
   Pencil,
   Trash2,
-  AlertCircle,
-  Clock,
-  ChevronDown,
+  Layers
 } from "lucide-react";
 import axios from "axios";
 
+const API = "http://localhost:5000/api";
+
 const AdminPage = () => {
-  const [inventory, setInventory] = useState([]);
-
-  useEffect(() => {
-    axios
-      .get("http://localhost:5000/api/resources")
-      .then((res) => setInventory(res.data))
-      .catch((err) => console.log(err));
-  }, []);
-
   const [activeTab, setActiveTab] = useState("users");
+
   const [users, setUsers] = useState([]);
-
-  useEffect(() => {
-    axios
-      .get("http://localhost:5000/api/users")
-      .then((res) => setUsers(res.data));
-  }, []);
-
-  const [complaints, setComplaints] = useState([]);
-
-  useEffect(() => {
-    axios
-      .get("http://localhost:5000/api/complaints")
-      .then((res) => setComplaints(res.data))
-      .catch((err) => console.log(err));
-  }, []);
-
   const [groups, setGroups] = useState([]);
+  const [inventory, setInventory] = useState([]);
+  const [complaints, setComplaints] = useState([]);
   const [selectedGroupUsers, setSelectedGroupUsers] = useState([]);
 
+  const [editUser, setEditUser] = useState(null);
+
+  const [newUser, setNewUser] = useState({
+    username: "",
+    password: "",
+    full_name: "",
+    role_id: 3,
+    group_ids: [],
+  });
+
+  // ---------------- LOAD INITIAL DATA ----------------
   useEffect(() => {
-    axios
-      .get("http://localhost:5000/api/groups")
-      .then((res) => setGroups(res.data))
-      .catch((err) => console.log(err));
+    loadData();
   }, []);
 
+  const loadData = () => {
+    axios.get(`${API}/users`)
+      .then(res => setUsers(res.data))
+      .catch(err => console.error("Error loading users:", err));
+    
+    axios.get(`${API}/groups`)
+      .then(res => setGroups(res.data))
+      .catch(err => console.error("Error loading groups:", err));
+    
+    axios.get(`${API}/resources`)
+      .then(res => setInventory(res.data))
+      .catch(err => console.error("Error loading inventory:", err));
+    
+    axios.get(`${API}/complaints`)
+      .then(res => setComplaints(res.data))
+      .catch(err => console.error("Error loading complaints:", err));
+  };
+
+  // ---------------- USER CRUD ----------------
+
+  const handleNewUserInput = (e) => {
+    setNewUser({ ...newUser, [e.target.name]: e.target.value });
+  };
+
+  const handleNewUserGroups = (e) => {
+    const values = Array.from(e.target.selectedOptions).map(o => o.value);
+    setNewUser({ ...newUser, group_ids: values });
+  };
+
+  const createUser = async () => {
+    try {
+      const res = await axios.post(`${API}/users`, newUser);
+      const newUserId = res.data.insertId;
+
+      // Assign groups
+      const groupPromises = newUser.group_ids.map(gid => 
+        axios.post(`${API}/groups/assign`, {
+          user_id: newUserId,
+          group_id: gid
+        })
+      );
+      
+      await Promise.all(groupPromises);
+      
+      // Reload users
+      const usersRes = await axios.get(`${API}/users`);
+      setUsers(usersRes.data);
+      
+      // Reset form
+      setNewUser({
+        username: "",
+        password: "",
+        full_name: "",
+        role_id: 3,
+        group_ids: [],
+      });
+      
+      alert("User created successfully!");
+    } catch (err) {
+      console.error("Error creating user:", err);
+      alert("Failed to create user");
+    }
+  };
+
+  const deleteUser = async (id) => {
+    if (!window.confirm("Delete this user?")) return;
+    
+    try {
+      await axios.delete(`${API}/users/${id}`);
+      const res = await axios.get(`${API}/users`);
+      setUsers(res.data);
+      alert("User deleted successfully!");
+    } catch (err) {
+      console.error("Error deleting user:", err);
+      alert("Failed to delete user");
+    }
+  };
+
+  // Load groups of selected user when clicking edit
+  const openEditUser = async (u) => {
+    // FIXED: Properly get role_id from database
+    const roleMap = {
+      'admin': 1,
+      'power_user': 2,
+      'normal_user': 3
+    };
+    
+    setEditUser({ 
+      ...u, 
+      role_id: roleMap[u.role_name] || 3,
+      group_ids: [],
+      password: "" 
+    });
+
+    try {
+      const res = await axios.get(`${API}/user-groups/${u.id}`);
+      const gids = res.data.map(g => String(g.group_id));
+      setEditUser(prev => ({ ...prev, group_ids: gids }));
+    } catch (err) {
+      console.error("Error loading user groups:", err);
+    }
+  };
+
+  const handleEditUserGroups = (e) => {
+    const values = Array.from(e.target.selectedOptions).map(o => o.value);
+    setEditUser({ ...editUser, group_ids: values });
+  };
+
+  const updateUser = async () => {
+    try {
+      // Update user basic info
+      await axios.put(`${API}/users/${editUser.id}`, {
+        full_name: editUser.full_name,
+        role_id: editUser.role_id,
+        password: editUser.password || ""
+      });
+
+      // Clear old group mappings
+      await axios.delete(`${API}/user-groups/${editUser.id}`);
+
+      // Assign new groups
+      const groupPromises = editUser.group_ids.map(gid => 
+        axios.post(`${API}/groups/assign`, {
+          user_id: editUser.id,
+          group_id: gid
+        })
+      );
+      
+      await Promise.all(groupPromises);
+
+      // Reload users
+      const res = await axios.get(`${API}/users`);
+      setUsers(res.data);
+      
+      alert("User updated successfully!");
+    } catch (err) {
+      console.error("Error updating user:", err);
+      alert("Failed to update user");
+    }
+  };
+
+  // ---------------- GROUP MEMBERS ----------------
+
+  const loadGroupMembers = (gid) => {
+    axios.get(`${API}/groups/${gid}/users`)
+      .then(res => setSelectedGroupUsers(res.data))
+      .catch(err => console.error("Error loading group members:", err));
+  };
+
+  // ---------------- UI ----------------
+
   return (
-    <div
-      className="container-fluid min-vh-100 bg-light p-4"
-      style={{ fontFamily: "sans-serif" }}
-    >
-      {/* Top Header */}
+    <div className="container-fluid min-vh-100 bg-light p-4">
+
+      {/* HEADER */}
       <div className="d-flex justify-content-between align-items-center mb-4">
-        <h2 className="fw-bold m-0">AMHS</h2>
-        <div className="d-flex align-items-center">
-          <span className="me-2 text-secondary">
-            Logged in as: <strong className="text-dark">John Admin</strong>
-          </span>
-          <span className="badge bg-secondary-subtle text-dark border px-2 py-1">
-            Admin
-          </span>
-        </div>
+        <h3 className="fw-bold">AMHS - Admin Panel</h3>
+        <span className="badge bg-dark">Admin</span>
       </div>
 
-      {/* Main Navigation Buttons */}
+      {/* NAV TABS */}
       <div className="d-flex gap-3 mb-4">
-        <button
-          onClick={() => setActiveTab("users")}
-          className={`btn d-flex align-items-center gap-2 px-4 py-2 rounded-3 shadow-sm border-0 ${activeTab === "users" ? "btn-primary" : "bg-white text-secondary"}`}
-        >
-          <Users size={20} /> Users
+        <button onClick={()=>setActiveTab("users")} className={`btn ${activeTab==="users"?"btn-primary":"bg-white"}`}>
+          <Users size={18}/> Users
         </button>
-        <button
-          onClick={() => setActiveTab("inventory")}
-          className={`btn d-flex align-items-center gap-2 px-4 py-2 rounded-3 shadow-sm border-0 ${activeTab === "inventory" ? "btn-primary" : "bg-white text-secondary"}`}
-        >
-          <Package size={20} /> Inventory
+        <button onClick={()=>setActiveTab("inventory")} className={`btn ${activeTab==="inventory"?"btn-primary":"bg-white"}`}>
+          <Package size={18}/> Inventory
         </button>
-        <button
-          onClick={() => setActiveTab("complaints")}
-          className={`btn d-flex align-items-center gap-2 px-4 py-2 rounded-3 shadow-sm border-0 ${activeTab === "complaints" ? "btn-primary" : "bg-white text-secondary"}`}
-        >
-          <Wrench size={20} /> AMC Complaints
+        <button onClick={()=>setActiveTab("complaints")} className={`btn ${activeTab==="complaints"?"btn-primary":"bg-white"}`}>
+          <Wrench size={18}/> Complaints
         </button>
-        <button
-          onClick={() => setActiveTab("groups")}
-          className={`btn d-flex align-items-center gap-2 px-4 py-2 rounded-3 shadow-sm border-0 ${activeTab === "groups" ? "btn-primary" : "bg-white text-secondary"}`}
-        >
-          <Users size={20} /> Groups
+        <button onClick={()=>setActiveTab("groups")} className={`btn ${activeTab==="groups"?"btn-primary":"bg-white"}`}>
+          <Layers size={18}/> Groups
         </button>
       </div>
 
-      {/* Content Area */}
-      <div className="card border-0 shadow-sm rounded-4 p-4">
-        {/* USERS VIEW */}
-        {activeTab === "users" && (
+      <div className="card p-4 shadow-sm border-0">
+
+        {/* ---------------- USERS ---------------- */}
+        {activeTab==="users" && (
           <>
-            <div className="d-flex justify-content-between align-items-center mb-4">
-              <h4 className="fw-bold mb-0">User Management</h4>
-              <button className="btn btn-primary d-flex align-items-center gap-2">
-                <Plus size={18} /> Add User
+            <div className="d-flex justify-content-between mb-3">
+              <h5>User Management</h5>
+              <button className="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addUserModal">
+                <Plus size={16}/> Add User
               </button>
             </div>
-            <div className="table-responsive">
-              <table className="table align-middle">
-                <thead className="table-light">
-                  <tr className="text-secondary small text-uppercase">
-                    <th className="border-0">Name</th>
-                    <th className="border-0">Email</th>
-                    <th className="border-0">Role</th>
-                    <th className="border-0">Groups</th>
-                    <th className="border-0 text-end pe-4">Actions</th>
+
+            <table className="table align-middle">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Username</th>
+                  <th>Role</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map(u => (
+                  <tr key={u.id}>
+                    <td>{u.full_name}</td>
+                    <td>{u.username}</td>
+                    <td>{u.role_name}</td>
+                    <td>
+                      <button className="btn btn-link"
+                        data-bs-toggle="modal"
+                        data-bs-target="#editUserModal"
+                        onClick={()=>openEditUser(u)}>
+                        <Pencil size={18}/>
+                      </button>
+                      <button className="btn btn-link text-danger"
+                        onClick={()=>deleteUser(u.id)}>
+                        <Trash2 size={18}/>
+                      </button>
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {users.map((u) => (
-                    <tr key={u.id}>
-                      <td className="fw-medium py-3">{u.full_name}</td>
-                      <td>{u.username}</td>
-                      <td>
-                        <span
-                          className="badge rounded-1 px-2 py-1"
-                          style={{ backgroundColor: u.color, color: u.text }}
-                        >
-                          {u.role_name}
-                        </span>
-                      </td>
-                      <td>{u.groups} groups</td>
-                      <td className="text-end">
-                        <button className="btn btn-link text-primary p-1">
-                          <Pencil size={18} />
-                        </button>
-                        <button className="btn btn-link text-danger p-1">
-                          <Trash2 size={18} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </table>
           </>
         )}
 
-        {/* INVENTORY VIEW */}
-        {activeTab === "inventory" && (
+        {/* ---------------- INVENTORY ---------------- */}
+        {activeTab==="inventory" && (
           <>
-            <div className="d-flex justify-content-between align-items-center mb-4">
-              <h4 className="fw-bold mb-0">Inventory Management</h4>
-              <button className="btn btn-success d-flex align-items-center gap-2">
-                <Plus size={18} /> Add Resource
-              </button>
-            </div>
-            {inventory.map((item) => (
-              <div
-                key={item.id}
-                className="card mb-3 border border-light-subtle rounded-3 p-3 shadow-sm position-relative"
-              >
-                <div className="d-flex justify-content-between">
-                  <div>
-                    <h5 className="fw-bold mb-1">{item.resource_code}</h5>
-                    <span
-                      className="badge bg-primary-subtle text-primary mb-2"
-                      style={{ fontSize: "0.7rem" }}
-                    >
-                      {item.type_name}
-                    </span>
-
-                    <p className="text-secondary mb-1 small">
-                      {item.description}
-                    </p>
-
-                    <p className="mb-0 small">
-                      <strong>Assigned User:</strong>{" "}
-                      <span className="text-secondary">
-                        {item.assigned_user
-                          ? item.assigned_user
-                          : "Not Assigned"}
-                      </span>
-                    </p>
-
-                    <p className="mb-0 small">
-                      <strong>Assigned Group:</strong>{" "}
-                      <span className="text-secondary">
-                        {item.assigned_group
-                          ? item.assigned_group
-                          : "Not Assigned"}
-                      </span>
-                    </p>
-                  </div>
-                  <div className="d-flex gap-2">
-                    <button className="btn btn-link text-primary p-0">
-                      <Pencil size={18} />
-                    </button>
-                    <button className="btn btn-link text-danger p-0">
-                      <Trash2 size={18} />
-                    </button>
-                  </div>
+            <h5>Inventory</h5>
+            {inventory.length === 0 ? (
+              <p>No inventory items found</p>
+            ) : (
+              inventory.map(item=>(
+                <div key={item.id} className="border rounded p-2 mb-2">
+                  <b>{item.resource_code}</b> ({item.type_name})<br/>
+                  {item.description}<br/>
+                  User: {item.assigned_user || "Not Assigned"}<br/>
+                  Group: {item.assigned_group || "Not Assigned"}
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </>
         )}
 
-        {/* COMPLAINTS VIEW */}
-        {activeTab === "complaints" && (
+        {/* ---------------- COMPLAINTS ---------------- */}
+        {activeTab==="complaints" && (
           <>
-            <div className="d-flex justify-content-between align-items-center mb-4">
-              <h4 className="fw-bold mb-0">AMC Complaints</h4>
-              <button
-                className="btn btn-warning text-white fw-bold d-flex align-items-center gap-2"
-                style={{ backgroundColor: "#e65100" }}
-              >
-                <Plus size={18} /> Log Complaint
-              </button>
-            </div>
-            {complaints.map((c) => (
-              <div
-                key={c.id}
-                className="card mb-3 border border-light-subtle rounded-3 p-3 shadow-sm"
-              >
-                <div className="d-flex justify-content-between align-items-center">
-                  <div className="d-flex align-items-start gap-3">
-                    {c.id === 1 ? (
-                      <AlertCircle className="text-danger mt-1" />
-                    ) : (
-                      <Clock className="text-warning mt-1" />
-                    )}
-                    <div>
-                      <h5 className="fw-bold mb-1">Complaint #{c.id}</h5>
-
-                      <p className="mb-2 text-secondary">{c.title}</p>
-
-                      <div className="small text-secondary">
-                        <div className="mb-1">
-                          <strong>Resource:</strong> {c.resource_code}
-                        </div>
-                        <div className="mb-1">
-                          <strong>Raised By:</strong> {c.raised_by}
-                        </div>
-                        <div className="mb-1">
-                          <strong>Group:</strong> {c.group_name}
-                        </div>
-                        <div>
-                          <strong>Status:</strong> {c.status}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="dropdown">
-                    <button
-                      className="btn btn-light border d-flex align-items-center gap-5 px-3 py-2"
-                      style={{ backgroundColor: "#e9ecef" }}
-                    >
-                      {c.status} <ChevronDown size={16} />
-                    </button>
-                  </div>
+            <h5>Complaints</h5>
+            {complaints.length === 0 ? (
+              <p>No complaints found</p>
+            ) : (
+              complaints.map(c=>(
+                <div key={c.id} className="border rounded p-2 mb-2">
+                  <b>#{c.id}</b> {c.title}<br/>
+                  Resource: {c.resource_code}<br/>
+                  Raised By: {c.raised_by}<br/>
+                  Group: {c.group_name}<br/>
+                  Status: {c.status}
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </>
         )}
 
-        {activeTab === "groups" && (
+        {/* ---------------- GROUPS ---------------- */}
+        {activeTab==="groups" && (
           <>
-            <div className="d-flex justify-content-between align-items-center mb-4">
-              <h4 className="fw-bold mb-0">Project Groups</h4>
-              <button className="btn btn-primary">Add Group</button>
-            </div>
-
-            {groups.map((g) => (
-              <div key={g.id} className="card p-3 mb-2 shadow-sm">
-                <div className="d-flex justify-content-between align-items-center">
-                  <h5 className="mb-0">{g.group_name}</h5>
-                  <button
-                    className="btn btn-sm btn-outline-secondary"
-                    onClick={() => {
-                      axios
-                        .get(`http://localhost:5000/api/groups/${g.id}/users`)
-                        .then((res) => setSelectedGroupUsers(res.data));
-                    }}
-                  >
+            <h5>Project Groups</h5>
+            {groups.length === 0 ? (
+              <p>No groups found</p>
+            ) : (
+              groups.map(g=>(
+                <div key={g.id} className="border rounded p-2 mb-2 d-flex justify-content-between">
+                  {g.group_name}
+                  <button className="btn btn-sm btn-outline-secondary" onClick={()=>loadGroupMembers(g.id)}>
                     View Members
                   </button>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
 
-            {selectedGroupUsers.length > 0 && (
-              <div className="mt-4">
-                <h6>Group Members</h6>
+            {selectedGroupUsers.length>0 && (
+              <div className="mt-3">
+                <b>Group Members</b>
                 <ul>
-                  {selectedGroupUsers.map((u) => (
-                    <li key={u.id}>
-                      {u.full_name} ({u.username})
-                    </li>
+                  {selectedGroupUsers.map(u=>(
+                    <li key={u.id}>{u.full_name} ({u.username})</li>
                   ))}
                 </ul>
               </div>
             )}
           </>
         )}
+
       </div>
+
+      {/* ---------------- ADD USER MODAL ---------------- */}
+      <div className="modal fade" id="addUserModal">
+        <div className="modal-dialog">
+          <div className="modal-content">
+
+            <div className="modal-header">
+              <h5>Add User</h5>
+              <button className="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+
+            <div className="modal-body">
+              <input 
+                className="form-control mb-2" 
+                placeholder="Full Name" 
+                name="full_name" 
+                value={newUser.full_name}
+                onChange={handleNewUserInput}
+              />
+              <input 
+                className="form-control mb-2" 
+                placeholder="Username" 
+                name="username" 
+                value={newUser.username}
+                onChange={handleNewUserInput}
+              />
+              <input 
+                className="form-control mb-2" 
+                placeholder="Password" 
+                type="password" 
+                name="password" 
+                value={newUser.password}
+                onChange={handleNewUserInput}
+              />
+
+              <select className="form-control mb-2" name="role_id" value={newUser.role_id} onChange={handleNewUserInput}>
+                <option value="1">Admin</option>
+                <option value="2">Power User</option>
+                <option value="3">Normal User</option>
+              </select>
+
+              <label>Assign Groups</label>
+              <select multiple className="form-control" value={newUser.group_ids} onChange={handleNewUserGroups}>
+                {groups.map(g=>(
+                  <option key={g.id} value={g.id}>{g.group_name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="modal-footer">
+              <button className="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+              <button className="btn btn-primary" data-bs-dismiss="modal" onClick={createUser}>Create</button>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      {/* ---------------- EDIT USER MODAL ---------------- */}
+      <div className="modal fade" id="editUserModal">
+        <div className="modal-dialog">
+          <div className="modal-content">
+
+            <div className="modal-header">
+              <h5>Edit User</h5>
+              <button className="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+
+            <div className="modal-body">
+              <input className="form-control mb-2"
+                placeholder="Full Name"
+                value={editUser?.full_name || ""}
+                onChange={e=>setEditUser({...editUser, full_name:e.target.value})}
+              />
+
+              <input className="form-control mb-2"
+                placeholder="New Password (optional)"
+                type="password"
+                value={editUser?.password || ""}
+                onChange={e=>setEditUser({...editUser, password:e.target.value})}
+              />
+
+              <select 
+                className="form-control mb-2"
+                value={editUser?.role_id || 3}
+                onChange={e=>setEditUser({...editUser, role_id: parseInt(e.target.value)})}
+              >
+                <option value="1">Admin</option>
+                <option value="2">Power User</option>
+                <option value="3">Normal User</option>
+              </select>
+
+              <label>Assign Groups</label>
+              <select
+                multiple
+                className="form-control"
+                value={editUser?.group_ids || []}
+                onChange={handleEditUserGroups}
+              >
+                {groups.map(g=>(
+                  <option key={g.id} value={String(g.id)}>{g.group_name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="modal-footer">
+              <button className="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+              <button className="btn btn-primary" data-bs-dismiss="modal" onClick={updateUser}>
+                Update
+              </button>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
     </div>
   );
 };
