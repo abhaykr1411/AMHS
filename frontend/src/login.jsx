@@ -23,6 +23,7 @@ function Login(){
             });
             console.log(response);
             if (response.data.success){
+                localStorage.setItem("user", JSON.stringify(response.data.user));
                 if(response.data.user.role === "admin"){
                     navigate('/adminpage');
                 }else if (response.data.user.role === "power_user"){

@@ -1,169 +1,227 @@
-import React, { useState } from 'react';
-import { 
-  Users, Package, Wrench, Plus, Pencil, Trash2, 
-  AlertCircle, Clock, ChevronDown 
-} from 'lucide-react';
+import { useState, useEffect } from "react";
+import { User, Package, Users, Layers, ArrowRight } from "lucide-react";
+import axios from "axios";
+import { useNavigate } from "react-router-dom";
+import NormalPage from "./NormalPage"; // We can reuse components or logic, but for clarity I'll write it out independently or use Tabs.
+
+const API = "http://localhost:5000/api";
 
 const PowerPage = () => {
-  const [activeTab, setActiveTab] = useState('users');
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState("dashboard"); // 'dashboard' or 'manage'
+  
+  const [currentUser, setCurrentUser] = useState(null);
+  
+  // Data for Management
+  const [allUsers, setAllUsers] = useState([]);
+  const [allGroups, setAllGroups] = useState([]);
+  const [allInventory, setAllInventory] = useState([]);
+  
+  // Assignment States
+  const [assignGroupData, setAssignGroupData] = useState({ user_id: "", group_id: "" });
+  const [editResource, setEditResource] = useState(null); // For assigning resources
+  const [assignResourceData, setAssignResourceData] = useState({ assigned_user_id: "", assigned_group_id: "" });
 
-  // --- Mock Data ---
-  const users = [
-    { id: 1, name: 'John Admin', email: 'john@company.com', role: 'Admin', groups: 2, color: '#fce4ec', text: '#d81b60' },
-    { id: 2, name: 'Sarah Manager', email: 'sarah@company.com', role: 'Power User', groups: 1, color: '#e3f2fd', text: '#1976d2' },
-    { id: 3, name: 'Mike User', email: 'mike@company.com', role: 'Normal User', groups: 1, color: '#e8f5e9', text: '#388e3c' },
-  ];
+  useEffect(() => {
+    const storedUser = localStorage.getItem("user");
+    if (!storedUser) {
+      navigate("/");
+      return;
+    }
+    setCurrentUser(JSON.parse(storedUser));
+    loadManageData();
+  }, [navigate]);
 
-  const inventory = [
-    { id: 'WS-001', type: 'Workstation', desc: 'Dell Precision, 32GB RAM', assigned: 'User: John Admin' },
-    { id: 'DT-045', type: 'Desktop', desc: 'HP EliteDesk', assigned: 'User: Mike User' },
-    { id: 'SRV-01', type: 'Server', desc: 'Dell R740', assigned: 'Group: IT Department' },
-    { id: 'PR-012', type: 'Printer', desc: 'HP LaserJet', assigned: 'Group: IT Department' },
-  ];
+  const loadManageData = () => {
+    axios.get(`${API}/users`).then(res => setAllUsers(res.data));
+    axios.get(`${API}/groups`).then(res => setAllGroups(res.data));
+    axios.get(`${API}/resources`).then(res => setAllInventory(res.data));
+  };
 
-  const complaints = [
-    { id: 1, title: 'Monitor flickering', priority: 'High', resource: 'WS-001 (Workstation)', reporter: 'John Admin', date: '15/1/2026', status: 'Open', color: '#fff3e0', text: '#ef6c00' },
-    { id: 2, title: 'Server overheating', priority: 'Critical', resource: 'SRV-01 (Server)', reporter: 'Sarah Manager', date: '15/1/2026', status: 'In Progress', color: '#ffebee', text: '#c62828' },
-  ];
+  // --- ACTIONS ---
+
+  const handleAssignGroup = async () => {
+    if(!assignGroupData.user_id || !assignGroupData.group_id) return alert("Select both user and group");
+    
+    try {
+      await axios.post(`${API}/groups/assign`, assignGroupData);
+      alert("User assigned to group successfully!");
+      setAssignGroupData({ user_id: "", group_id: "" });
+    } catch (err) {
+      alert("Failed to assign group");
+    }
+  };
+
+  const openResourceAssign = (item) => {
+    setEditResource(item);
+    setAssignResourceData({
+      assigned_user_id: item.assigned_user_id || "",
+      assigned_group_id: item.assigned_group_id || ""
+    });
+  };
+
+  const handleAssignResource = async () => {
+    try {
+      await axios.put(`${API}/resources/assign/${editResource.id}`, {
+        assigned_user_id: assignResourceData.assigned_user_id || null,
+        assigned_group_id: assignResourceData.assigned_group_id || null
+      });
+      alert("Resource reassigned successfully!");
+      loadManageData(); // Refresh list
+    } catch (err) {
+      alert("Failed to assign resource");
+    }
+  };
+
+  const handleUnassignResource = async () => {
+    try {
+      await axios.put(`${API}/resources/unassign/${editResource.id}`);
+      alert("Resource unassigned!");
+      loadManageData();
+    } catch (err) {
+      alert("Failed");
+    }
+  };
+
+  if (!currentUser) return <div>Loading...</div>;
 
   return (
-    <div className="container-fluid min-vh-100 bg-light p-4" style={{ fontFamily: 'sans-serif' }}>
-      {/* Top Header */}
+    <div className="container-fluid min-vh-100 bg-light p-4">
+      {/* HEADER */}
       <div className="d-flex justify-content-between align-items-center mb-4">
-        <h2 className="fw-bold m-0">Enterprise Management System</h2>
-        <div className="d-flex align-items-center">
-          <span className="me-2 text-secondary">Logged in as: <strong className="text-dark">John Admin</strong></span>
-          <span className="badge bg-secondary-subtle text-dark border px-2 py-1">Admin</span>
+        <div>
+          <h3 className="fw-bold">Power Console</h3>
+          <span className="badge bg-warning text-dark">Power User</span>
+        </div>
+        <button onClick={() => { localStorage.clear(); navigate('/'); }} className="btn btn-outline-danger btn-sm">Logout</button>
+      </div>
+
+      {/* TABS */}
+      <ul className="nav nav-pills mb-4">
+        <li className="nav-item">
+          <button className={`nav-link ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>
+            My Dashboard
+          </button>
+        </li>
+        <li className="nav-item">
+          <button className={`nav-link ${activeTab === 'manage' ? 'active' : ''}`} onClick={() => setActiveTab('manage')}>
+            Management Console
+          </button>
+        </li>
+      </ul>
+
+      {/* TAB CONTENT */}
+      {activeTab === 'dashboard' ? (
+        // Reusing the Logic of Normal Page (visualized here)
+        <NormalPage />
+      ) : (
+        <div className="row">
+          
+          {/* 1. ASSIGN GROUPS CARD */}
+          <div className="col-md-4 mb-4">
+            <div className="card shadow-sm border-0 h-100">
+              <div className="card-header bg-white fw-bold">
+                <Users size={18} className="me-2"/> Assign User to Group
+              </div>
+              <div className="card-body">
+                <label className="form-label">Select User</label>
+                <select className="form-select mb-3" value={assignGroupData.user_id} onChange={e => setAssignGroupData({...assignGroupData, user_id: e.target.value})}>
+                  <option value="">-- Select User --</option>
+                  {allUsers.map(u => <option key={u.id} value={u.id}>{u.full_name} ({u.username})</option>)}
+                </select>
+
+                <label className="form-label">Select Group</label>
+                <select className="form-select mb-3" value={assignGroupData.group_id} onChange={e => setAssignGroupData({...assignGroupData, group_id: e.target.value})}>
+                  <option value="">-- Select Group --</option>
+                  {allGroups.map(g => <option key={g.id} value={g.id}>{g.group_name}</option>)}
+                </select>
+
+                <button className="btn btn-primary w-100" onClick={handleAssignGroup}>
+                  Assign Group <ArrowRight size={16}/>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* 2. MANAGE INVENTORY CARD */}
+          <div className="col-md-8">
+            <div className="card shadow-sm border-0">
+              <div className="card-header bg-white fw-bold">
+                <Layers size={18} className="me-2"/> Manage Inventory Assignments
+              </div>
+              <div className="card-body">
+                <table className="table table-hover align-middle">
+                  <thead className="table-light">
+                    <tr>
+                      <th>Code</th>
+                      <th>Current Assignment</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {allInventory.map(item => (
+                      <tr key={item.id}>
+                        <td className="fw-bold">{item.resource_code}</td>
+                        <td>
+                          {item.assigned_user && <span className="badge bg-info me-1">User: {item.assigned_user}</span>}
+                          {item.assigned_group && <span className="badge bg-secondary">Group: {item.assigned_group}</span>}
+                          {!item.assigned_user && !item.assigned_group && <span className="text-muted small">Unassigned</span>}
+                        </td>
+                        <td>
+                          <button 
+                            className="btn btn-sm btn-outline-primary" 
+                            data-bs-toggle="modal" 
+                            data-bs-target="#assignResourceModal"
+                            onClick={() => openResourceAssign(item)}
+                          >
+                            Assign
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      )}
+
+      {/* ASSIGN RESOURCE MODAL */}
+      <div className="modal fade" id="assignResourceModal">
+        <div className="modal-dialog">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h5>Assign: {editResource?.resource_code}</h5>
+              <button className="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div className="modal-body">
+              <p className="text-muted small">Assign to a User OR a Group (or both/neither)</p>
+              
+              <label>Assign to User</label>
+              <select className="form-control mb-3" value={assignResourceData.assigned_user_id} onChange={e => setAssignResourceData({...assignResourceData, assigned_user_id: e.target.value})}>
+                <option value="">-- None --</option>
+                {allUsers.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+              </select>
+
+              <label>Assign to Group</label>
+              <select className="form-control mb-3" value={assignResourceData.assigned_group_id} onChange={e => setAssignResourceData({...assignResourceData, assigned_group_id: e.target.value})}>
+                <option value="">-- None --</option>
+                {allGroups.map(g => <option key={g.id} value={g.id}>{g.group_name}</option>)}
+              </select>
+            </div>
+            <div className="modal-footer justify-content-between">
+              <button className="btn btn-outline-danger" data-bs-dismiss="modal" onClick={handleUnassignResource}>Unassign All</button>
+              <div>
+                <button className="btn btn-secondary me-2" data-bs-dismiss="modal">Cancel</button>
+                <button className="btn btn-primary" data-bs-dismiss="modal" onClick={handleAssignResource}>Save Assignment</button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Main Navigation Buttons */}
-      <div className="d-flex gap-3 mb-4">
-        <button 
-          onClick={() => setActiveTab('users')}
-          className={`btn d-flex align-items-center gap-2 px-4 py-2 rounded-3 shadow-sm border-0 ${activeTab === 'users' ? 'btn-primary' : 'bg-white text-secondary'}`}
-        >
-          <Users size={20} /> Users
-        </button>
-        <button 
-          onClick={() => setActiveTab('inventory')}
-          className={`btn d-flex align-items-center gap-2 px-4 py-2 rounded-3 shadow-sm border-0 ${activeTab === 'inventory' ? 'btn-primary' : 'bg-white text-secondary'}`}
-        >
-          <Package size={20} /> Inventory
-        </button>
-        <button 
-          onClick={() => setActiveTab('complaints')}
-          className={`btn d-flex align-items-center gap-2 px-4 py-2 rounded-3 shadow-sm border-0 ${activeTab === 'complaints' ? 'btn-primary' : 'bg-white text-secondary'}`}
-        >
-          <Wrench size={20} /> AMC Complaints
-        </button>
-      </div>
-
-      {/* Content Area */}
-      <div className="card border-0 shadow-sm rounded-4 p-4">
-        
-        {/* USERS VIEW */}
-        {activeTab === 'users' && (
-          <>
-            <div className="d-flex justify-content-between align-items-center mb-4">
-              <h4 className="fw-bold mb-0">User Management</h4>
-              <button className="btn btn-primary d-flex align-items-center gap-2"><Plus size={18} /> Add User</button>
-            </div>
-            <div className="table-responsive">
-              <table className="table align-middle">
-                <thead className="table-light">
-                  <tr className="text-secondary small text-uppercase">
-                    <th className="border-0">Name</th>
-                    <th className="border-0">Email</th>
-                    <th className="border-0">Role</th>
-                    <th className="border-0">Groups</th>
-                    <th className="border-0 text-end pe-4">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map(u => (
-                    <tr key={u.id}>
-                      <td className="fw-medium py-3">{u.full_name}</td>
-                      <td>{u.username}</td>
-                      <td><span className="badge rounded-1 px-2 py-1" style={{ backgroundColor: u.color, color: u.text }}>{u.role_name}</span></td>
-                      <td>{u.groups} groups</td>
-                      <td className="text-end">
-                        <button className="btn btn-link text-primary p-1"><Pencil size={18} /></button>
-                        <button className="btn btn-link text-danger p-1"><Trash2 size={18} /></button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </>
-        )}
-
-        {/* INVENTORY VIEW */}
-        {activeTab === 'inventory' && (
-          <>
-            <div className="d-flex justify-content-between align-items-center mb-4">
-              <h4 className="fw-bold mb-0">Inventory Management</h4>
-              <button className="btn btn-success d-flex align-items-center gap-2"><Plus size={18} /> Add Resource</button>
-            </div>
-            {inventory.map(item => (
-              <div key={item.id} className="card mb-3 border border-light-subtle rounded-3 p-3 shadow-sm position-relative">
-                <div className="d-flex justify-content-between">
-                  <div>
-                    <h5 className="fw-bold mb-1">{item.id}</h5>
-                    <span className="badge bg-primary-subtle text-primary mb-2" style={{fontSize: '0.7rem'}}>{item.type}</span>
-                    <p className="text-secondary mb-1 small">{item.desc}</p>
-                    <p className="mb-0 small"><strong>Assigned to:</strong> <span className="text-secondary">{item.assigned}</span></p>
-                  </div>
-                  <div className="d-flex gap-2">
-                    <button className="btn btn-link text-primary p-0"><Pencil size={18} /></button>
-                    <button className="btn btn-link text-danger p-0"><Trash2 size={18} /></button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </>
-        )}
-
-        {/* COMPLAINTS VIEW */}
-        {activeTab === 'complaints' && (
-          <>
-            <div className="d-flex justify-content-between align-items-center mb-4">
-              <h4 className="fw-bold mb-0">AMC Complaints</h4>
-              <button className="btn btn-warning text-white fw-bold d-flex align-items-center gap-2" style={{backgroundColor: '#e65100'}}>
-                <Plus size={18} /> Log Complaint
-              </button>
-            </div>
-            {complaints.map(c => (
-              <div key={c.id} className="card mb-3 border border-light-subtle rounded-3 p-3 shadow-sm">
-                <div className="d-flex justify-content-between align-items-center">
-                  <div className="d-flex align-items-start gap-3">
-                    {c.id === 1 ? <AlertCircle className="text-danger mt-1" /> : <Clock className="text-warning mt-1" />}
-                    <div>
-                      <h5 className="fw-bold mb-1 d-flex align-items-center gap-2">
-                        Complaint #{c.id} 
-                        <span className="badge rounded-1" style={{backgroundColor: c.color, color: c.text, fontSize: '0.65rem'}}>{c.priority}</span>
-                      </h5>
-                      <p className="mb-2 text-secondary">{c.title}</p>
-                      <div className="small text-secondary">
-                        <div className="mb-1"><strong>Resource:</strong> {c.resource}</div>
-                        <div className="mb-1"><strong>Reported by:</strong> {c.reporter}</div>
-                        <div><strong>Date:</strong> {c.date}, 12:20:53 am</div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="dropdown">
-                    <button className="btn btn-light border d-flex align-items-center gap-5 px-3 py-2" style={{backgroundColor: '#e9ecef'}}>
-                      {c.status} <ChevronDown size={16} />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </>
-        )}
-
-      </div>
     </div>
   );
 };

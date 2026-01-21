@@ -1,18 +1,48 @@
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Login from "./login";
-import {BrowserRouter, Routers, Route, Routes} from 'react-router-dom';
 import PowerPage from "./PowerPage";
 import NormalPage from "./NormalPage";
 import AdminPage from "./AdminPage";
+import PrivateRoute from "./PrivateRoute"; // Import the guard
 
 function App() {
   return (
     <div className="App">
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Login/>}></Route>
-          <Route path="/adminpage" element={<AdminPage/>}></Route>
-          <Route path="/powerpage" element={<PowerPage/>}></Route>
-          <Route path="/userpage" element={<NormalPage/>}></Route>
+          {/* Public Route */}
+          <Route path="/" element={<Login />} />
+
+          {/* Protected Admin Route - Only 'admin' can enter */}
+          <Route 
+            path="/adminpage" 
+            element={
+              <PrivateRoute allowedRoles={['admin']}>
+                <AdminPage />
+              </PrivateRoute>
+            } 
+          />
+
+          {/* Protected Power User Route - 'power_user' AND 'admin' can enter */}
+          <Route 
+            path="/powerpage" 
+            element={
+              <PrivateRoute allowedRoles={['power_user', 'admin']}>
+                <PowerPage />
+              </PrivateRoute>
+            } 
+          />
+
+          {/* Protected Normal User Route - All roles can enter (or limit to just normal_user) */}
+          <Route 
+            path="/userpage" 
+            element={
+              <PrivateRoute allowedRoles={['normal_user', 'power_user', 'admin']}>
+                <NormalPage />
+              </PrivateRoute>
+            } 
+          />
+
         </Routes>
       </BrowserRouter>
     </div>

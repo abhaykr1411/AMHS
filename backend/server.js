@@ -322,6 +322,27 @@ app.delete('/api/complaints/:id', (req, res) => {
   });
 });
 
+// In server.js, replace the app.get('/api/resources') endpoint with this:
+app.get('/api/resources', (req,res)=>{
+  const sql = `
+    SELECT r.id, r.resource_code, r.description,
+           rt.type_name,
+           r.assigned_user_id,  -- Added this
+           r.assigned_group_id, -- Added this
+           u.full_name AS assigned_user,
+           pg.group_name AS assigned_group
+    FROM resources r
+    JOIN resource_types rt ON r.resource_type_id = rt.id
+    LEFT JOIN users u ON r.assigned_user_id = u.id
+    LEFT JOIN project_groups pg ON r.assigned_group_id = pg.id
+  `;
+  
+  db.query(sql,(err,result)=>{
+    if(err) return res.status(500).json(err);
+    res.json(result);
+  });
+});
+
 app.listen(5000, () => {
   console.log("Server running on port 5000");
 });
